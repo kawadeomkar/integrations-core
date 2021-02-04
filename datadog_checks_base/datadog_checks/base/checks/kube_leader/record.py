@@ -5,6 +5,8 @@
 import json
 from datetime import datetime
 
+from six import string_types
+
 # Import lazily to reduce memory footprint
 parse_rfc3339 = None
 
@@ -20,8 +22,12 @@ REQUIRED_FIELDS = [
 
 
 class ElectionRecord(object):
-    def __init__(self, record_string):
-        self._record = json.loads(record_string)
+    def __init__(self, record):
+        if isinstance(record, string_types):
+            self._record = json.loads(record)
+        elif isinstance(record, dict):
+            if record.get("apiVersion") == "coordination.k8s.io/v1" and record.get("kind") == "Lease":
+                self._record = record.get("spec")
 
     def validate(self):
         reason_prefix = "Invalid record: "
@@ -70,7 +76,17 @@ class ElectionRecord(object):
 
     @property
     def transitions(self):
-        return self._record.get("leaderTransitions", 0)
+        # leaseTransitions is the field in the Lease spec
+        transitions = self._record.get("leaseTransitions")
+        if transitions is not None:
+            return transitions
+
+        # leaderTransitions is the field in the leader annotations
+        transitions = self._record.get("leaderTransitions")
+        if transitions is not None:
+            return transitions
+
+        return 0
 
     @property
     def seconds_until_renew(self):

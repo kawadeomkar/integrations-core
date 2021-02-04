@@ -28,6 +28,44 @@ RAW_VALID_RECORD = (
     '"leaderTransitions":7}'
 )
 
+LEASE_OBJECT = {
+    "apiVersion": "coordination.k8s.io/v1",
+    "kind": "Lease",
+    "metadata": {
+        "creationTimestamp": "2021-02-04T08:23:33Z",
+        "managedFields": [
+            {
+                "apiVersion": "coordination.k8s.io/v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                    "f:spec": {
+                        "f:acquireTime": {},
+                        "f:holderIdentity": {},
+                        "f:leaseDurationSeconds": {},
+                        "f:leaseTransitions": {},
+                        "f:renewTime": {},
+                    }
+                },
+                "manager": "kube-scheduler",
+                "operation": "Update",
+                "time": "2021-02-04T08:23:33Z",
+            }
+        ],
+        "name": "kube-scheduler",
+        "namespace": "kube-system",
+        "resourceVersion": "97056",
+        "selfLink": "/apis/coordination.k8s.io/v1/namespaces/kube-system/leases/kube-scheduler",
+        "uid": "e68238b0-59e6-4928-aceb-686956ab58e5",
+    },
+    "spec": {
+        "acquireTime": "2021-02-04T08:23:33.000000Z",
+        "holderIdentity": "ip-172-20-76-27_fa8a18f2-9c8a-42e8-99ff-2e759d623d0e",
+        "leaseDurationSeconds": 15,
+        "leaseTransitions": 42,
+        "renewTime": "2021-02-04T15:51:10.318860Z",
+    },
+}
+
 EP_INSTANCE = {
     "namespace": "base",
     "record_kind": "endpoints",
@@ -103,7 +141,7 @@ def make_fake_object(record=None):
 
 
 class TestElectionRecord:
-    def test_parse_raw(self):
+    def test_parse_annotation(self):
         record = ElectionRecord(RAW_VALID_RECORD)
 
         valid, reason = record.validate()
@@ -119,6 +157,24 @@ class TestElectionRecord:
             "Leader: dd-cluster-agent-568f458dd6-kj6vt "
             "since 2018-12-17 11:53:07+00:00, "
             "next renew 2018-12-18 12:32:22+00:00"
+        )
+
+    def test_parse_lease(self):
+        record = ElectionRecord(LEASE_OBJECT)
+
+        valid, reason = record.validate()
+        assert valid is True
+        assert reason is None
+
+        assert record.leader_name == "ip-172-20-76-27_fa8a18f2-9c8a-42e8-99ff-2e759d623d0e"
+        assert record.lease_duration == 15
+        assert record.transitions == 42
+        assert record.renew_time > record.acquire_time
+        assert record.seconds_until_renew < 0
+        assert record.summary == (
+            "Leader: ip-172-20-76-27_fa8a18f2-9c8a-42e8-99ff-2e759d623d0e "
+            "since 2021-02-04 08:23:33+00:00, "
+            "next renew 2021-02-04 15:51:10.318860+00:00"
         )
 
     def test_validation(self):
